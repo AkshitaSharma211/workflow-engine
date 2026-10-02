@@ -25,6 +25,11 @@ class StepRun(Base):
     status = Column(String)
     output = Column(Text, nullable=True)
 
+class SeenJob(Base):
+    __tablename__ = "seen_jobs"
+    id = Column(Integer, primary_key=True)
+    job_id = Column(Integer, unique=True)
+
 
 def init_db():
     Base.metadata.create_all(engine)
