@@ -1,6 +1,7 @@
 from engine.steps import fetch_jobs, filter_jobs
 from engine.steps import dedupe
 from engine.db import SessionLocal, SeenJob
+from engine.steps import telegram_alert
 
 
 
@@ -38,3 +39,9 @@ def test_dedupe_filters_out_seen_jobs():
     result = dedupe({"filter": jobs}, {})
     assert len(result) == 1
     assert result[0]["id"] == 202
+
+
+def test_telegram_alert_sends_real_message():
+    jobs = [{"title": "Test Job", "location": "Remote", "url": "https://example.com"}]
+    result = telegram_alert({"dedupe": jobs}, {})
+    assert result == "Message sent"
