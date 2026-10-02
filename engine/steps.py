@@ -1,5 +1,10 @@
 import requests
 from engine.db import SessionLocal, SeenJob
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 
 def fetch_jobs(inputs: dict, config: dict) -> list:
@@ -62,3 +67,24 @@ def dedupe(inputs: dict, config: dict) -> list:
 
     session.close()
     return new_jobs
+
+
+def telegram_alert(inputs: dict, config: dict) -> str:
+    """
+    inputs: {"dedupe": [list of new jobs]}
+    Sends a Telegram message listing the new jobs.
+    """
+    jobs = inputs["dedupe"]
+    if not jobs:
+        return "No new jobs, nothing sent"
+
+    lines = [f"{job['title']} ({job['location']}) - {job['url']}" for job in jobs]
+    message = "New jobs found:\n" + "\n".join(lines)
+
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+
+    response = requests.post(url, data={"chat_id": chat_id, "text": message})
+    response.raise_for_status()
+    return "Message sent"
