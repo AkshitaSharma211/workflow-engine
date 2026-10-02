@@ -1,4 +1,5 @@
 import requests
+from engine.db import SessionLocal, SeenJob
 
 
 def fetch_jobs(inputs: dict, config: dict) -> list:
@@ -42,3 +43,22 @@ def filter_jobs(inputs: dict, config: dict) -> list:
             filtered.append(job)
 
     return filtered
+
+
+
+def dedupe(inputs: dict, config: dict) -> list:
+    """
+    inputs: {"filter": [list of jobs from filter_jobs]}
+    Returns only jobs whose id is NOT already in seen_jobs.
+    """
+    jobs = inputs["filter"]
+    session = SessionLocal()
+
+    new_jobs = []
+    for job in jobs:
+        already_seen = session.query(SeenJob).filter_by(job_id=job["id"]).first()
+        if already_seen is None:
+            new_jobs.append(job)
+
+    session.close()
+    return new_jobs
