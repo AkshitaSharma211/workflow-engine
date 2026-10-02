@@ -25,3 +25,20 @@ def fetch_jobs(inputs: dict, config: dict) -> list:
         })
 
     return simplified
+
+
+def filter_jobs(inputs: dict, config: dict) -> list:
+    """
+    inputs: {"fetch": [list of jobs from fetch_jobs]}
+    config: {"keyword": "intern"}
+    Returns only jobs whose title contains the keyword (case-insensitive).
+    """
+    jobs = inputs["fetch"]
+    keyword = config["keyword"].lower()
+
+    filtered = []
+    for job in jobs:
+        if keyword in job["title"].lower():
+            filtered.append(job)
+
+    return filtered
