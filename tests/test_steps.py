@@ -2,6 +2,9 @@ from engine.steps import fetch_jobs, filter_jobs
 from engine.steps import dedupe
 from engine.db import SessionLocal, SeenJob
 from engine.steps import telegram_alert
+from engine.steps import mark_seen
+from engine.db import SessionLocal, SeenJob
+
 
 
 
@@ -45,3 +48,21 @@ def test_telegram_alert_sends_real_message():
     jobs = [{"title": "Test Job", "location": "Remote", "url": "https://example.com"}]
     result = telegram_alert({"dedupe": jobs}, {})
     assert result == "Message sent"
+
+
+
+def test_mark_seen_inserts_new_rows():
+    session = SessionLocal()
+    session.query(SeenJob).delete()
+    session.commit()
+    session.close()
+
+    jobs = [{"id": 501}, {"id": 502}]
+    result = mark_seen({"dedupe": jobs}, {})
+
+    session = SessionLocal()
+    count = session.query(SeenJob).count()
+    session.close()
+
+    assert count == 2
+    assert result == "Marked 2 jobs as seen"

@@ -88,3 +88,18 @@ def telegram_alert(inputs: dict, config: dict) -> str:
     response = requests.post(url, data={"chat_id": chat_id, "text": message})
     response.raise_for_status()
     return "Message sent"
+
+def mark_seen(inputs: dict, config: dict) -> str:
+    """
+    inputs: {"dedupe": [list of jobs that were just alerted on]}
+    Records each job's id in seen_jobs.
+    """
+    jobs = inputs["dedupe"]
+    session = SessionLocal()
+
+    for job in jobs:
+        session.add(SeenJob(job_id=job["id"]))
+    session.commit()
+    session.close()
+
+    return f"Marked {len(jobs)} jobs as seen"
