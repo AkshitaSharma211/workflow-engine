@@ -23,11 +23,12 @@ def fetch_jobs(inputs: dict, config: dict) -> list:
 
     simplified = []
     for job in jobs:
+        location = (job.get("location") or {}).get("name", "Unknown")
         simplified.append({
             "id": job["id"],
             "title": job["title"],
             "url": job["absolute_url"],
-            "location": job["location"]["name"],
+            "location": location,
         })
 
     return simplified
@@ -59,26 +60,26 @@ def dedupe(inputs: dict, config: dict) -> list:
     jobs = inputs["filter"]
     session = SessionLocal()
 
-    new_jobs = []
-    for job in jobs:
-        already_seen = session.query(SeenJob).filter_by(job_id=job["id"]).first()
-        if already_seen is None:
-            new_jobs.append(job)
+    try:
+        new_jobs = []
+        for job in jobs:
+            if session.query(SeenJob).filter_by(job_id=job["id"]).first() is None:
+                new_jobs.append(job)
+        return new_jobs
+    finally:
+        session.close()
 
-    session.close()
-    return new_jobs
 
-
-def telegram_alert(inputs: dict, config: dict) -> str:
+def telegram_alert(inputs: dict, config: dict) -> list:
     jobs = inputs["dedupe"]
     if not jobs:
-        return "No new jobs, nothing sent"
+        return []
 
     max_jobs = config.get("max_jobs", 10)
     shown = jobs[:max_jobs]
     remaining = len(jobs) - len(shown)
 
-    lines = [f"{job['title']} ({job['location']}) - {job['url']}" for job in shown]
+    lines = [f"{j['title']} ({j['location']}) - {j['url']}" for j in shown]
     message = "New jobs found:\n" + "\n".join(lines)
     if remaining > 0:
         message += f"\n...and {remaining} more"
@@ -87,21 +88,22 @@ def telegram_alert(inputs: dict, config: dict) -> str:
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
 
-    response = requests.post(url, data={"chat_id": chat_id, "text": message})
+    response = requests.post(url, data={"chat_id": chat_id, "text": message}, timeout=10)
     response.raise_for_status()
-    return "Message sent"
+    return shown
+
 
 def mark_seen(inputs: dict, config: dict) -> str:
-    """
-    inputs: {"dedupe": [list of jobs that were just alerted on]}
-    Records each job's id in seen_jobs.
-    """
-    jobs = inputs["dedupe"]
+    """inputs: {"notify": jobs that were actually sent}"""
+    jobs = inputs["notify"]
     session = SessionLocal()
-
-    for job in jobs:
-        session.add(SeenJob(job_id=job["id"]))
-    session.commit()
-    session.close()
-
-    return f"Marked {len(jobs)} jobs as seen"
+    try:
+        added = 0
+        for job in jobs:
+            if session.query(SeenJob).filter_by(job_id=job["id"]).first() is None:
+                session.add(SeenJob(job_id=job["id"]))
+                added += 1
+        session.commit()
+        return f"Marked {added} jobs as seen"
+    finally:
+        session.close()
