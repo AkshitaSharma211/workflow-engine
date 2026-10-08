@@ -1,68 +1,56 @@
-from engine.steps import fetch_jobs, filter_jobs
-from engine.steps import dedupe
 from engine.db import SessionLocal, SeenJob
-from engine.steps import telegram_alert
-from engine.steps import mark_seen
-from engine.db import SessionLocal, SeenJob
+from engine.steps import (
+    fetch_jobs,
+    filter_jobs,
+    dedupe,
+    telegram_alert,
+    mark_seen,
+)
 
 
+class FakeResponse:
+    """Stand-in for a requests response, so tests don't hit real APIs."""
+
+    def __init__(self, json_data=None):
+        self._json = json_data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._json
 
 
-def test_fetch_jobs_returns_real_data():
-    result = fetch_jobs({}, {"board": "stripe"})
-    assert isinstance(result, list)
-    assert len(result) > 0
-    assert "title" in result[0]
-    assert "url" in result[0]
-    print(result[0])  # just to see one real job
-
-
-def test_filter_jobs_keeps_only_matching_titles():
-    jobs = [
-        {"id": 1, "title": "Backend Intern", "url": "x", "location": "Pune"},
-        {"id": 2, "title": "Senior Engineer", "url": "y", "location": "Mumbai"},
-        {"id": 3, "title": "Data Science Intern", "url": "z", "location": "Delhi"},
-    ]
-    result = filter_jobs({"fetch": jobs}, {"keyword": "intern"})
-    assert len(result) == 2
-    assert all("intern" in job["title"].lower() for job in result)
-
-
-def test_dedupe_filters_out_seen_jobs():
-    session = SessionLocal()
-    session.query(SeenJob).delete()  # clean slate for this test
-    session.add(SeenJob(job_id=101))
-    session.commit()
-    session.close()
-
-    jobs = [
-        {"id": 101, "title": "Seen Job"},
-        {"id": 202, "title": "New Job"},
-    ]
-    result = dedupe({"filter": jobs}, {})
-    assert len(result) == 1
-    assert result[0]["id"] == 202
-
-
-def test_telegram_alert_sends_real_message():
-    jobs = [{"title": "Test Job", "location": "Remote", "url": "https://example.com"}]
-    result = telegram_alert({"dedupe": jobs}, {})
-    assert result == "Message sent"
-
-
-
-def test_mark_seen_inserts_new_rows():
+def clear_seen_jobs():
     session = SessionLocal()
     session.query(SeenJob).delete()
     session.commit()
     session.close()
 
-    jobs = [{"id": 501}, {"id": 502}]
-    result = mark_seen({"dedupe": jobs}, {})
 
-    session = SessionLocal()
-    count = session.query(SeenJob).count()
-    session.close()
+# ---------- fetch_jobs ----------
 
-    assert count == 2
-    assert result == "Marked 2 jobs as seen"
+def test_fetch_jobs_returns_real_data():
+    # Real network call to Greenhouse
+    result = fetch_jobs({}, {"board": "stripe"})
+    assert isinstance(result, list)
+    assert len(result) > 0
+    assert "title" in result[0]
+    assert "url" in result[0]
+
+
+def test_fetch_jobs_handles_missing_location(monkeypatch):
+    # Needs the location guard in fetch_jobs:
+    #   location = (job.get("location") or {}).get("name", "Unknown")
+    fake_data = {
+        "jobs": [
+            {"id": 1, "title": "No Location Job", "absolute_url": "u", "location": None},
+            {"id": 2, "title": "Normal Job", "absolute_url": "v", "location": {"name": "Pune"}},
+        ]
+    }
+    monkeypatch.setattr(
+        "engine.steps.requests.get", lambda *a, **k: FakeResponse(fake_data)
+    )
+    result = fetch_jobs({}, {"board": "anything"})
+    assert result[0]["location"] == "Unknown"
+    assert result[1]["location"]

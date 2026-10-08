@@ -14,8 +14,8 @@ workflow = {
     "filter":   {"deps": ["fetch"],   "type": "filter_jobs",    "config": {"keyword": "machine learning"}},
     "dedupe":   {"deps": ["filter"],  "type": "dedupe",         "config": {}},
     "notify":   {"deps": ["dedupe"],  "type": "telegram_alert", "config": {}},
-    "mark":     {"deps": ["dedupe"],  "type": "mark_seen",      "config": {}},
-}
+    "mark": {"deps": ["notify"], "type": "mark_seen", "config": {}},
+}    
 
 if __name__ == "__main__":
     results = run_workflow(workflow, REGISTRY)
