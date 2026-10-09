@@ -1,8 +1,20 @@
 from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker
 import datetime
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-DATABASE_URL = "postgresql+psycopg://postgres:devpass@localhost:5432/postgres"
+_url = os.environ.get("DATABASE_URL")
+if not _url:
+    raise RuntimeError("DATABASE_URL is not set")
+
+# Neon gives "postgresql://...", but SQLAlchemy needs the driver named
+# explicitly to use psycopg 3.
+if _url.startswith("postgresql://"):
+    _url = _url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+DATABASE_URL = _url
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
