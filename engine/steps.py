@@ -5,34 +5,40 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-
 def fetch_jobs(inputs: dict, config: dict) -> list:
     """
-    config: {"board": "stripe"}
-    Returns a list of simplified job dicts.
+    config: {"boards": ["stripe", "airbnb", ...]}
+    Returns simplified job dicts from every board that responds.
     """
-    board = config["board"]
-    url = f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs"
-
-    response = requests.get(url)
-    response.raise_for_status()  # raises an error if the request failed
-
-    data = response.json()
-    jobs = data["jobs"]
-
+    boards = config["boards"]
     simplified = []
-    for job in jobs:
-        location = (job.get("location") or {}).get("name", "Unknown")
-        simplified.append({
-            "id": job["id"],
-            "title": job["title"],
-            "url": job["absolute_url"],
-            "location": location,
-        })
+    failed = 0
 
+    for board in boards:
+        url = f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs"
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            failed += 1
+            print(f"fetch_jobs: skipping '{board}': {e}")
+            continue
+
+        for job in response.json()["jobs"]:
+            location = (job.get("location") or {}).get("name", "Unknown")
+            simplified.append({
+                "id": job["id"],
+                "title": job["title"],
+                "url": job["absolute_url"],
+                "location": location,
+                "company": board,
+            })
+
+    if failed == len(boards):
+        raise RuntimeError("fetch_jobs: every board failed")
+
+    print(f"fetch_jobs: {len(simplified)} jobs from {len(boards) - failed}/{len(boards)} boards")
     return simplified
-
 
 def filter_jobs(inputs: dict, config: dict) -> list:
     """

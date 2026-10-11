@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, F
 from sqlalchemy.orm import declarative_base, sessionmaker
 import datetime
 import os
+from sqlalchemy import BigInteger
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -16,7 +17,7 @@ if _url.startswith("postgresql://"):
 
 DATABASE_URL = _url
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -40,7 +41,7 @@ class StepRun(Base):
 class SeenJob(Base):
     __tablename__ = "seen_jobs"
     id = Column(Integer, primary_key=True)
-    job_id = Column(Integer, unique=True)
+    job_id = Column(BigInteger, unique=True)
 
 
 def init_db():

@@ -10,7 +10,7 @@ REGISTRY = {
 }
 
 workflow = {
-    "fetch":    {"deps": [],          "type": "fetch_jobs",     "config": {"board": "stripe"}},
+    "fetch": {"deps": [], "type": "fetch_jobs", "config": {"boards": ["stripe", "airbnb", "databricks", "cloudflare", "coinbase"]}},
     "filter":   {"deps": ["fetch"],   "type": "filter_jobs",    "config": {"keyword": "machine learning"}},
     "dedupe":   {"deps": ["filter"],  "type": "dedupe",         "config": {}},
     "notify":   {"deps": ["dedupe"],  "type": "telegram_alert", "config": {}},
