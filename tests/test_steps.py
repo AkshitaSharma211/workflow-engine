@@ -32,7 +32,7 @@ def clear_seen_jobs():
 
 def test_fetch_jobs_returns_real_data():
     # Real network call to Greenhouse
-    result = fetch_jobs({}, {"board": "stripe"})
+    result = fetch_jobs({}, {"boards": ["stripe"]})
     assert isinstance(result, list)
     assert len(result) > 0
     assert "title" in result[0]
@@ -51,6 +51,6 @@ def test_fetch_jobs_handles_missing_location(monkeypatch):
     monkeypatch.setattr(
         "engine.steps.requests.get", lambda *a, **k: FakeResponse(fake_data)
     )
-    result = fetch_jobs({}, {"board": "anything"})
+    result = fetch_jobs({}, {"boards": ["anything"]})
     assert result[0]["location"] == "Unknown"
     assert result[1]["location"]
