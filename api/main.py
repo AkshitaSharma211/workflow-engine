@@ -1,7 +1,9 @@
 import os
 import secrets
-from fastapi import FastAPI, Depends, Header, HTTPException
+from fastapi import FastAPI, Depends, Header, HTTPException, BackgroundTasks
 from engine.db import SessionLocal, Run
+from engine.executor import run_workflow
+from run_job_alert import workflow, REGISTRY
 
 app = FastAPI()
 API_KEY = os.environ.get("API_KEY")
@@ -12,9 +14,28 @@ def require_api_key(x_api_key: str = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
+def _run_in_background():
+    try:
+        run_workflow(workflow, REGISTRY)
+    except Exception as e:
+        print(f"background run failed: {e}")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/workflows", dependencies=[Depends(require_api_key)])
+def list_workflows():
+    return [{"name": "job_alert", "steps": list(workflow.keys())}]
+
+
+@app.post("/workflows/job_alert/run", status_code=202,
+          dependencies=[Depends(require_api_key)])
+def trigger_job_alert(background_tasks: BackgroundTasks):
+    background_tasks.add_task(_run_in_background)
+    return {"status": "accepted", "message": "Run started, check /runs"}
 
 
 @app.get("/runs", dependencies=[Depends(require_api_key)])

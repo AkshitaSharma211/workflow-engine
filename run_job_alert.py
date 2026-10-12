@@ -19,4 +19,6 @@ workflow = {
 
 if __name__ == "__main__":
     results = run_workflow(workflow, REGISTRY)
-    print(results)
+    print(f"fetched={len(results['fetch'])} matched={len(results['filter'])} "
+          f"new={len(results['dedupe'])} sent={len(results['notify'])}")
+    print(results["mark"])
