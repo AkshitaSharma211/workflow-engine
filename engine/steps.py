@@ -42,21 +42,34 @@ def fetch_jobs(inputs: dict, config: dict) -> list:
 
 def filter_jobs(inputs: dict, config: dict) -> list:
     """
-    inputs: {"fetch": [list of jobs from fetch_jobs]}
-    config: {"keyword": "intern"}
-    Returns only jobs whose title contains the keyword (case-insensitive).
+    inputs: {"fetch": [jobs]}
+    config: {"keywords": [...], "level_include": [...],
+             "level_exclude": [...], "locations": [...]}
+    A job passes only if all four rules hold (case-insensitive).
     """
     jobs = inputs["fetch"]
-    keyword = config["keyword"].lower()
+    keywords = [w.lower() for w in config["keywords"]]
+    level_include = [w.lower() for w in config["level_include"]]
+    level_exclude = [w.lower() for w in config["level_exclude"]]
+    locations = [w.lower() for w in config["locations"]]
 
     filtered = []
     for job in jobs:
-        if keyword in job["title"].lower():
-            filtered.append(job)
+        title = job["title"].lower()
+        location = job["location"].lower()
+
+        if not any(w in title for w in keywords):
+            continue
+        if not any(w in title for w in level_include):
+            continue
+        if any(w in title for w in level_exclude):
+            continue
+        if not any(w in location for w in locations):
+            continue
+
+        filtered.append(job)
 
     return filtered
-
-
 
 def dedupe(inputs: dict, config: dict) -> list:
     """
