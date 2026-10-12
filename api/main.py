@@ -1,7 +1,7 @@
 import os
 import secrets
 from fastapi import FastAPI, Depends, Header, HTTPException, BackgroundTasks
-from engine.db import SessionLocal, Run
+from engine.db import SessionLocal, Run, StepRun
 from engine.executor import run_workflow
 from run_job_alert import workflow, REGISTRY
 
@@ -46,4 +46,16 @@ def list_runs(limit: int = 10):
             {"id": r.id, "status": r.status,
              "started_at": r.started_at, "finished_at": r.finished_at}
             for r in runs
+        ]
+
+
+@app.get("/runs/{run_id}", dependencies=[Depends(require_api_key)])
+def get_run(run_id: int):
+    with SessionLocal() as s:
+        steps = s.query(StepRun).filter(______).all()      # 1: filter by this run's id
+        if not steps:
+            raise HTTPException(status_code=____, detail="Run not found")   # 2: which status code?
+        return [
+            {"step_id": st.step_id, "status": st.status, "output": st.output}
+            for st in steps
         ]
