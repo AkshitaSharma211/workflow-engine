@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from engine.db import User
 from api.auth import hash_password, verify_password
+from pathlib import Path
+from fastapi.responses import FileResponse, RedirectResponse
 
 app = FastAPI()
 API_KEY = os.environ.get("API_KEY")
@@ -51,6 +53,29 @@ def _run_in_background():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+STATIC = Path(__file__).parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+def home(request: Request):
+    if not request.session.get("user_id"):
+        return RedirectResponse("/login", status_code=302)
+    return FileResponse(STATIC / "home.html")
+
+
+@app.get("/login", include_in_schema=False)
+def login_page(request: Request):
+    if request.session.get("user_id"):
+        return RedirectResponse("/", status_code=302)
+    return FileResponse(STATIC / "login.html")
+
+
+@app.get("/signup", include_in_schema=False)
+def signup_page(request: Request):
+    if request.session.get("user_id"):
+        return RedirectResponse("/", status_code=302)
+    return FileResponse(STATIC / "signup.html")
 
 
 @app.post("/signup", status_code=201)

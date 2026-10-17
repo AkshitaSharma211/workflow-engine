@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex items-center justify-center">
+<form id="f" class="bg-white rounded shadow p-6 w-80 space-y-3">
+  <h1 class="text-xl font-bold">Log in</h1>
+  <input id="email" type="email" placeholder="Email" required class="border rounded px-3 py-2 w-full">
+  <input id="password" type="password" placeholder="Password" required class="border rounded px-3 py-2 w-full">
+  <button class="bg-slate-900 text-white rounded px-4 py-2 w-full">Log in</button>
+  <p id="msg" class="text-sm text-red-600"></p>
+  <p class="text-sm text-slate-500">No account? <a href="/signup" class="underline">Sign up</a></p>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await fetch('/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value,
+    }),
+  });
+  if (r.ok) { window.location = '/'; return; }
+  const data = await r.json();
+  document.getElementById('msg').textContent = data.detail || 'Something went wrong';
+});
+</script>
+</body>
+</html>
