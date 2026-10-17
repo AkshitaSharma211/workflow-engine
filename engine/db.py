@@ -56,6 +56,13 @@ class Job(Base):
     last_seen = Column(DateTime)
     is_open = Column(Boolean, default=True)    
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)   
+
 
 def init_db():
     Base.metadata.create_all(engine)

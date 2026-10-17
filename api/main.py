@@ -4,14 +4,41 @@ from fastapi import FastAPI, Depends, Header, HTTPException, BackgroundTasks
 from engine.db import SessionLocal, Run, StepRun
 from engine.executor import run_workflow
 from run_job_alert import workflow, REGISTRY
+from fastapi import Request
+from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
+from engine.db import User
+from api.auth import hash_password, verify_password
 
 app = FastAPI()
 API_KEY = os.environ.get("API_KEY")
 
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY is not set")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    same_site="lax",
+    https_only=os.environ.get("HTTPS_ONLY", "false") == "true",
+    max_age=14 * 24 * 3600,
+)
+
+
+class Credentials(BaseModel):
+    email: str
+    password: str
 
 def require_api_key(x_api_key: str = Header(None)):
     if not API_KEY or not x_api_key or not secrets.compare_digest(x_api_key, API_KEY):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+ def require_user(request: Request) -> int:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    return user_id       
 
 
 def _run_in_background():
@@ -24,6 +51,55 @@ def _run_in_background():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/signup", status_code=201)
+def signup(creds: Credentials, request: Request):
+    email = creds.email.strip().lower()
+    if "@" not in email or len(creds.password) < 8:
+        raise HTTPException(status_code=422,
+                            detail="Valid email and a password of 8+ characters required")
+    with SessionLocal() as s:
+        if s.query(User).filter(User.email == email).first():
+            raise HTTPException(status_code=409, detail="Email already registered")
+        user = User(email=email, password_hash=hash_password(creds.password))
+        s.add(user)
+        s.commit()
+        request.session["user_id"] = user.id
+    return {"email": email}
+
+
+@app.post("/login")
+def login(creds: Credentials, request: Request):
+    email = creds.email.strip().lower()
+    with SessionLocal() as s:
+        user = s.query(User).filter(User.email == email).first()
+        if not user or not verify_password(creds.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        request.session["user_id"] = user.id
+    return {"email": email}
+
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"status": "logged out"}
+
+
+@app.get("/me")
+def me(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    with SessionLocal() as s:
+        user = s.get(User, user_id)
+        if not user:
+            request.session.clear()
+            raise HTTPException(status_code=401, detail="Not logged in")
+        return {"id": user.id, "email": user.email}
+    
+
+
 
 
 @app.get("/workflows", dependencies=[Depends(require_api_key)])
