@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, F
 from sqlalchemy.orm import declarative_base, sessionmaker
 import datetime
 import os
-from sqlalchemy import BigInteger
+from sqlalchemy import BigInteger, Boolean
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -42,6 +42,19 @@ class SeenJob(Base):
     __tablename__ = "seen_jobs"
     id = Column(Integer, primary_key=True)
     job_id = Column(BigInteger, unique=True)
+
+class Job(Base):
+    __tablename__ = "jobs"
+    id = Column(Integer, primary_key=True)
+    job_id = Column(BigInteger, unique=True)
+    title = Column(String)
+    company = Column(String)
+    url = Column(String)
+    location = Column(String)
+    status = Column(String, default="new")   # new / applied / ignored
+    first_seen = Column(DateTime, default=datetime.datetime.utcnow)
+    last_seen = Column(DateTime)
+    is_open = Column(Boolean, default=True)    
 
 
 def init_db():

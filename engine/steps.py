@@ -1,7 +1,10 @@
 import requests
-from engine.db import SessionLocal, SeenJob
+import datetime
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from engine.db import SessionLocal, SeenJob, Job
 import os
 from dotenv import load_dotenv
+import re
 
 load_dotenv()
 
@@ -40,6 +43,10 @@ def fetch_jobs(inputs: dict, config: dict) -> list:
     print(f"fetch_jobs: {len(simplified)} jobs from {len(boards) - failed}/{len(boards)} boards")
     return simplified
 
+def _has_word(text: str, words: list) -> bool:
+    """True if any of `words` appears in `text` as a whole word or phrase."""
+    return any(re.search(rf"\b{re.escape(w)}\b", text) for w in words)
+
 def filter_jobs(inputs: dict, config: dict) -> list:
     """
     inputs: {"fetch": [jobs]}
@@ -58,18 +65,19 @@ def filter_jobs(inputs: dict, config: dict) -> list:
         title = job["title"].lower()
         location = job["location"].lower()
 
-        if not any(w in title for w in keywords):
+        if not _has_word(title, keywords):
             continue
-        if not any(w in title for w in level_include):
+        if not _has_word(title, level_include):
             continue
-        if any(w in title for w in level_exclude):
+        if _has_word(title, level_exclude):
             continue
-        if not any(w in location for w in locations):
-            continue
+        if not _has_word(location, locations):
+            continue        
 
         filtered.append(job)
 
     return filtered
+
 
 def dedupe(inputs: dict, config: dict) -> list:
     """
@@ -126,3 +134,37 @@ def mark_seen(inputs: dict, config: dict) -> str:
         return f"Marked {added} jobs as seen"
     finally:
         session.close()
+
+def save_jobs(inputs: dict, config: dict) -> dict:
+    jobs = inputs["fetch"]
+    if not jobs:
+        return {"new": 0, "refreshed": 0, "closed": 0}
+
+    now = datetime.datetime.utcnow()
+    unique = {j["id"]: j for j in jobs}          # drop duplicates inside this fetch
+    companies = {j.get("company", "") for j in unique.values()}
+
+    with SessionLocal() as session:
+        # 1. which of these jobs do we already have?
+        stored = {row[0] for row in
+                  session.query(Job.job_id).filter(Job.job_id.in_(list(unique)))}
+
+        # 2. add the ones we don't have
+        session.add_all([
+            Job(job_id=j["id"], title=j["title"], company=j.get("company", ""),
+                url=j["url"], location=j["location"], last_seen=now, is_open=True)
+            for j in unique.values() if j["id"] not in stored
+        ])
+
+        # 3. refresh the ones we do have
+        session.query(Job).filter(Job.job_id.in_(list(stored))).update(
+            {"last_seen": now, "is_open": True}, synchronize_session=False)
+
+        # 4. close jobs from these companies that were not refreshed this run
+        closed = session.query(Job).filter(
+            Job.company.in_(companies), Job.is_open.is_(True), Job.last_seen < now
+        ).update({"is_open": False}, synchronize_session=False)
+
+        session.commit()
+
+    return {"new": len(unique) - len(stored), "refreshed": len(stored), "closed": closed}
