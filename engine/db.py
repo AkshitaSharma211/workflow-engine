@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, ForeignKey
+from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
 import datetime
 import os
@@ -63,6 +63,15 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)   
 
+
+class UserJob(Base):
+    __tablename__ = "user_jobs"
+    __table_args__ = (UniqueConstraint("user_id", "job_id"),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    status = Column(String, nullable=False)   # saved / applied / ignored
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 def init_db():
     Base.metadata.create_all(engine)

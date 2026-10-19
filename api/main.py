@@ -1,5 +1,9 @@
 import os
 import secrets
+import re
+import datetime
+from fastapi import Query
+from engine.db import Job, UserJob
 from fastapi import FastAPI, Depends, Header, HTTPException, BackgroundTasks
 from engine.db import SessionLocal, Run, StepRun
 from engine.executor import run_workflow
@@ -11,6 +15,8 @@ from engine.db import User
 from api.auth import hash_password, verify_password
 from pathlib import Path
 from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy import and_
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 API_KEY = os.environ.get("API_KEY")
@@ -56,12 +62,15 @@ def health():
 
 STATIC = Path(__file__).parent / "static"
 
+ASSETS = Path(__file__).parent / "assets"
+app.mount("/assets", StaticFiles(directory=ASSETS), name="assets")
+
 
 @app.get("/", include_in_schema=False)
-def home(request: Request):
-    if not request.session.get("user_id"):
-        return RedirectResponse("/login", status_code=302)
-    return FileResponse(STATIC / "home.html")
+def landing(request: Request):
+    if request.session.get("user_id"):
+        return RedirectResponse("/search", status_code=302)
+    return FileResponse(STATIC / "landing.html")
 
 
 @app.get("/login", include_in_schema=False)
@@ -160,3 +169,81 @@ def get_run(run_id: int):
             {"step_id": st.step_id, "status": st.status, "output": st.output}
             for st in steps
         ]
+    
+
+@app.get("/jobs")
+def search_jobs(
+    q: str = "",
+    remote: bool = False,
+    days: int = Query(0, ge=0, le=365),
+    open_only: bool = True,
+    status: str = "",
+    page: int = Query(1, ge=1),
+    user_id: int = Depends(require_user),
+):
+    per_page = 25
+    with SessionLocal() as s:
+        query = s.query(Job)
+        if open_only:
+            query = query.filter(Job.is_open.is_(True))
+            if status:
+                query = query.join(
+                UserJob, and_(UserJob.job_id == Job.id, UserJob.user_id == user_id)
+            ).filter(UserJob.status == status)
+
+           
+        if remote:
+            query = query.filter(Job.location.ilike("%remote%"))
+        if days:
+            since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+            query = query.filter(Job.first_seen >= since)
+        for word in q.split():                      # every word must match, as a whole word
+            query = query.filter(Job.title.op("~*")(rf"\m{re.escape(word)}\M"))
+
+        total = query.count()
+        jobs = (query.order_by(Job.first_seen.desc(), Job.id.desc())
+                     .offset((page - 1) * per_page).limit(per_page).all())
+
+        marks = {
+            uj.job_id: uj.status
+            for uj in s.query(UserJob).filter(
+                UserJob.user_id == user_id, UserJob.job_id.in_([j.id for j in jobs]))
+        }
+        return {
+            "total": total, "page": page, "per_page": per_page,
+            "jobs": [
+                {"id": j.id, "title": j.title, "company": j.company, "url": j.url,
+                 "location": j.location, "first_seen": j.first_seen,
+                 "is_open": j.is_open, "my_status": marks.get(j.id)}
+                for j in jobs
+            ],
+        }    
+
+class StatusBody(BaseModel):
+    status: str
+
+
+@app.put("/jobs/{job_id}/status")
+def set_status(job_id: int, body: StatusBody, user_id: int = Depends(require_user)):
+    if body.status not in {"saved", "applied", "ignored", "none"}:
+        raise HTTPException(status_code=422, detail="Invalid status")
+    with SessionLocal() as s:
+        if not s.get(Job, job_id):
+            raise HTTPException(status_code=404, detail="Job not found")
+        row = s.query(UserJob).filter_by(user_id=user_id, job_id=job_id).first()
+        if body.status == "none":
+            if row:
+                s.delete(row)
+        elif row:
+            row.status = body.status
+            row.updated_at = datetime.datetime.utcnow()
+        else:
+            s.add(UserJob(user_id=user_id, job_id=job_id, status=body.status))
+        s.commit()
+    return {"job_id": job_id, "status": body.status}
+
+@app.get("/search", include_in_schema=False)
+def search_page(request: Request):
+    if not request.session.get("user_id"):
+        return RedirectResponse("/login", status_code=302)
+    return FileResponse(STATIC / "jobs.html")
