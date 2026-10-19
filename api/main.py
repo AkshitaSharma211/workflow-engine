@@ -15,7 +15,7 @@ from engine.db import User
 from api.auth import hash_password, verify_password
 from pathlib import Path
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
@@ -247,3 +247,34 @@ def search_page(request: Request):
     if not request.session.get("user_id"):
         return RedirectResponse("/login", status_code=302)
     return FileResponse(STATIC / "jobs.html")
+
+@app.get("/stats")
+def stats(user_id: int = Depends(require_user)):
+    day_ago = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+    with SessionLocal() as s:
+        open_jobs = s.query(func.count(Job.id)).filter(Job.is_open.is_(True)).scalar()
+        new_24h = s.query(func.count(Job.id)).filter(
+            Job.is_open.is_(True), Job.first_seen >= day_ago).scalar()
+        last_updated = s.query(func.max(Job.last_seen)).scalar()
+        mine = dict(
+            s.query(UserJob.status, func.count(UserJob.id))
+            .filter(UserJob.user_id == user_id)
+            .group_by(UserJob.status).all()
+        )
+        newest = (s.query(Job).filter(Job.is_open.is_(True))
+                  .order_by(Job.first_seen.desc(), Job.id.desc()).limit(5).all())
+        return {
+            "open_jobs": open_jobs,
+            "new_24h": new_24h,
+            "last_updated": last_updated,
+            "mine": {k: mine.get(k, 0) for k in ("saved", "applied", "ignored")},
+            "newest": [{"id": j.id, "title": j.title, "company": j.company,
+                        "url": j.url, "location": j.location} for j in newest],
+        }   
+    
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard_page(request: Request):
+    if not request.session.get("user_id"):
+        return RedirectResponse("/login", status_code=302)
+    return FileResponse(STATIC / "dashboard.html")   

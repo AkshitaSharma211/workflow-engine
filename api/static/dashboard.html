@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div class="max-w-5xl mx-auto p-6">
+  <h1 class="text-2xl font-bold">Dashboard</h1>
+  <p id="updated" class="text-sm text-slate-500 mb-6"></p>
+
+  <div id="cards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8"></div>
+
+  <div class="flex justify-between items-center mb-2">
+    <h2 class="font-semibold">Newest jobs</h2>
+    <a href="/search" class="text-sm underline">Search all jobs</a>
+  </div>
+  <div id="newest" class="space-y-2"></div>
+</div>
+
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
+
+function card(label, value, href) {
+  return `<a href="${href}" class="bg-white rounded shadow p-4 block hover:bg-slate-50">
+    <div class="text-2xl font-bold">${value}</div>
+    <div class="text-sm text-slate-500">${label}</div></a>`;
+}
+
+fetch('/stats').then(async r => {
+  if (r.status === 401) { window.location = '/login'; return; }
+  const d = await r.json();
+  document.getElementById('updated').textContent = d.last_updated
+    ? 'Data last refreshed: ' + new Date(d.last_updated + 'Z').toLocaleString() : 'No data yet';
+  document.getElementById('cards').innerHTML =
+    card('Open jobs', d.open_jobs, '/search') +
+    card('New in 24h', d.new_24h, '/search') +
+    card('Saved', d.mine.saved, '/my-jobs') +
+    card('Applied', d.mine.applied, '/my-jobs') +
+    card('Ignored', d.mine.ignored, '/my-jobs');
+  document.getElementById('newest').innerHTML = d.newest.map(j => `
+    <div class="bg-white rounded shadow p-4">
+      <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium underline">${esc(j.title)}</a>
+      <div class="text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}</div>
+    </div>`).join('') || '<p class="text-slate-500">No jobs yet.</p>';
+});
+</script>
+<script src="/assets/nav.js"></script>
+</body>
+</html>
