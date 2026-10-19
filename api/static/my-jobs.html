@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My jobs</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div class="max-w-4xl mx-auto p-6">
+  <h1 class="text-2xl font-bold mb-4">My jobs</h1>
+  <div id="tabs" class="flex gap-2 mb-4 text-sm"></div>
+  <p id="count" class="text-sm text-slate-500 mb-2"></p>
+  <div id="list" class="space-y-2"></div>
+  <div id="pager" class="flex justify-between items-center mt-4 text-sm"></div>
+</div>
+
+<script>
+const TABS = [['saved', 'Saved'], ['applied', 'Applied'], ['ignored', 'Ignored']];
+const fromHash = location.hash.slice(1);
+const state = {status: TABS.some(t => t[0] === fromHash) ? fromHash : 'saved', page: 1};
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
+const on = 'bg-slate-900 text-white', off = 'bg-white border';
+
+async function load() {
+  document.getElementById('tabs').innerHTML = TABS.map(([v, label]) =>
+    `<button onclick="setTab('${v}')" class="px-3 py-1 rounded ${state.status === v ? on : off}">${label}</button>`).join('');
+  const count = document.getElementById('count');
+  try {
+    const p = new URLSearchParams({status: state.status, open_only: 'false', page: state.page});
+    const r = await fetch('/jobs?' + p);
+    if (r.status === 401) { window.location = '/login'; return; }
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const d = await r.json();
+
+    count.textContent = `${d.total} ${state.status} job${d.total === 1 ? '' : 's'}`;
+    document.getElementById('list').innerHTML = d.jobs.map(j => `
+      <div class="bg-white rounded shadow p-4 flex justify-between gap-4">
+        <div>
+          <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium underline">${esc(j.title)}</a>
+          <div class="text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}${j.is_open ? '' : ' · closed'}</div>
+        </div>
+        <div class="flex gap-1 text-xs items-start">
+          ${['saved', 'applied', 'ignored'].map(s =>
+            `<button onclick="mark(${j.id}, '${s}', '${j.my_status}')"
+              class="px-2 py-1 rounded ${j.my_status === s ? on : off}">${s}</button>`).join('')}
+        </div>
+      </div>`).join('') || '<p class="text-slate-500">Nothing here yet. Mark jobs from the Search page.</p>';
+
+    const pages = Math.max(1, Math.ceil(d.total / d.per_page));
+    document.getElementById('pager').innerHTML = `
+      <button onclick="goPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Prev</button>
+      <span>Page ${state.page} of ${pages}</span>
+      <button onclick="goPage(${state.page + 1})" ${state.page >= pages ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Next</button>`;
+  } catch (e) {
+    count.textContent = 'Could not load: ' + e.message;
+  }
+}
+
+function setTab(v) { state.status = v; state.page = 1; history.replaceState(null, '', '#' + v); load(); }
+function goPage(n) { state.page = n; load(); }
+
+async function mark(id, status, current) {
+  await fetch(`/jobs/${id}/status`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: current === status ? 'none' : status}),
+  });
+  load();
+}
+load();
+</script>
+<script src="/assets/nav.js"></script>
+</body>
+</html>
