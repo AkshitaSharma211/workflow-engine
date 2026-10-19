@@ -3,18 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jobs</title>
+<title>Search jobs</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-800">
 <div class="max-w-4xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-4">Explore jobs</h1>
-
-  <div id="tabs" class="flex gap-2 mb-4 text-sm"></div>
+  <h1 class="text-2xl font-bold mb-4">Explore jobs</h1>
 
   <div class="bg-white rounded shadow p-4 mb-4 space-y-3">
     <div class="flex gap-2">
-      <input id="kw" placeholder="Type a word and press Enter" class="border rounded px-3 py-2 flex-1">
+      <input id="kw" placeholder="Keyword, then press Enter" class="border rounded px-3 py-2 flex-1">
+      <input id="company" placeholder="Company (optional)" class="border rounded px-3 py-2 w-48">
     </div>
     <div id="chips" class="flex flex-wrap gap-2"></div>
     <div id="filters" class="flex flex-wrap gap-2 text-sm"></div>
@@ -26,21 +25,16 @@
 </div>
 
 <script>
-const state = {words: [], remote: false, days: 0, status: '', page: 1};
+const state = {words: [], remote: false, days: 0, company: '', page: 1};
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
 const on = 'bg-slate-900 text-white', off = 'bg-white border';
 
 function renderControls() {
-  const tabs = [['', 'Explore'], ['saved', 'Saved'], ['applied', 'Applied'], ['ignored', 'Ignored']];
-  document.getElementById('tabs').innerHTML = tabs.map(([v, label]) =>
-    `<button onclick="setTab('${v}')" class="px-3 py-1 rounded ${state.status === v ? on : off}">${label}</button>`).join('');
-
   document.getElementById('chips').innerHTML = state.words.map((w, i) =>
     `<span class="bg-slate-200 rounded px-2 py-1 text-sm">${esc(w)}
       <button onclick="removeWord(${i})" class="ml-1">✕</button></span>`).join('');
-
   const days = [[0, 'All time'], [1, '24 hours'], [7, '7 days']];
   document.getElementById('filters').innerHTML =
     `<button onclick="toggleRemote()" class="px-3 py-1 rounded ${state.remote ? on : off}">Remote only</button>` +
@@ -50,38 +44,43 @@ function renderControls() {
 
 async function load() {
   renderControls();
-  const p = new URLSearchParams();
-  if (state.words.length) p.set('q', state.words.join(' '));
-  if (state.remote) p.set('remote', 'true');
-  if (state.days) p.set('days', state.days);
-  if (state.status) { p.set('status', state.status); p.set('open_only', 'false'); }
-  p.set('page', state.page);
-  const r = await fetch('/jobs?' + p);
-  if (r.status === 401) { window.location = '/login'; return; }
-  const d = await r.json();
+  const count = document.getElementById('count');
+  try {
+    const p = new URLSearchParams();
+    if (state.words.length) p.set('q', state.words.join(' '));
+    if (state.company) p.set('company', state.company);
+    if (state.remote) p.set('remote', 'true');
+    if (state.days) p.set('days', state.days);
+    p.set('page', state.page);
+    const r = await fetch('/jobs?' + p);
+    if (r.status === 401) { window.location = '/login'; return; }
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const d = await r.json();
 
-  document.getElementById('count').textContent = `${d.total} jobs`;
-  document.getElementById('list').innerHTML = d.jobs.map(j => `
-    <div class="bg-white rounded shadow p-4 flex justify-between gap-4">
-      <div>
-        <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium underline">${esc(j.title)}</a>
-        <div class="text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}${j.is_open ? '' : ' · closed'}</div>
-      </div>
-      <div class="flex gap-1 text-xs items-start">
-        ${['saved', 'applied', 'ignored'].map(s =>
-          `<button onclick="mark(${j.id}, '${s}', '${j.my_status}')"
-            class="px-2 py-1 rounded ${j.my_status === s ? on : off}">${s}</button>`).join('')}
-      </div>
-    </div>`).join('') || '<p class="text-slate-500">Nothing matches.</p>';
+    count.textContent = `${d.total} jobs`;
+    document.getElementById('list').innerHTML = d.jobs.map(j => `
+      <div class="bg-white rounded shadow p-4 flex justify-between gap-4">
+        <div>
+          <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium underline">${esc(j.title)}</a>
+          <div class="text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}</div>
+        </div>
+        <div class="flex gap-1 text-xs items-start">
+          ${['saved', 'applied', 'ignored'].map(s =>
+            `<button onclick="mark(${j.id}, '${s}', '${j.my_status}')"
+              class="px-2 py-1 rounded ${j.my_status === s ? on : off}">${s}</button>`).join('')}
+        </div>
+      </div>`).join('') || '<p class="text-slate-500">Nothing matches.</p>';
 
-  const pages = Math.max(1, Math.ceil(d.total / d.per_page));
-  document.getElementById('pager').innerHTML = `
-    <button onclick="goPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Prev</button>
-    <span>Page ${state.page} of ${pages}</span>
-    <button onclick="goPage(${state.page + 1})" ${state.page >= pages ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Next</button>`;
+    const pages = Math.max(1, Math.ceil(d.total / d.per_page));
+    document.getElementById('pager').innerHTML = `
+      <button onclick="goPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Prev</button>
+      <span>Page ${state.page} of ${pages}</span>
+      <button onclick="goPage(${state.page + 1})" ${state.page >= pages ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Next</button>`;
+  } catch (e) {
+    count.textContent = 'Could not load jobs: ' + e.message;
+  }
 }
 
-function setTab(v) { state.status = v; state.page = 1; load(); }
 function toggleRemote() { state.remote = !state.remote; state.page = 1; load(); }
 function setDays(v) { state.days = v; state.page = 1; load(); }
 function removeWord(i) { state.words.splice(i, 1); state.page = 1; load(); }
@@ -101,6 +100,9 @@ document.getElementById('kw').addEventListener('keydown', e => {
   const w = e.target.value.trim();
   if (w && !state.words.includes(w)) { state.words.push(w); state.page = 1; load(); }
   e.target.value = '';
+});
+document.getElementById('company').addEventListener('change', e => {
+  state.company = e.target.value.trim(); state.page = 1; load();
 });
 load();
 </script>
