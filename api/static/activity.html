@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activity</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div class="max-w-4xl mx-auto p-6">
+  <h1 class="text-2xl font-bold">Activity</h1>
+  <p class="text-sm text-slate-500 mb-4">Every scheduled run of the job-collection workflow. Click a run to see its steps.</p>
+  <p id="msg" class="text-sm text-red-600 mb-2"></p>
+  <table class="w-full bg-white rounded shadow text-sm">
+    <thead class="text-left text-slate-500">
+      <tr><th class="p-3">Run</th><th>Status</th><th>Started</th><th>Duration</th></tr>
+    </thead>
+    <tbody id="runs"></tbody>
+  </table>
+  <div id="detail" class="mt-6"></div>
+</div>
+
+<script>
+const badge = {
+  success: 'bg-green-100 text-green-800',
+  failed: 'bg-red-100 text-red-800',
+  running: 'bg-yellow-100 text-yellow-800',
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const when = s => new Date(s + 'Z').toLocaleString();
+const dur = r => r.finished_at
+  ? Math.max(0, Math.round((new Date(r.finished_at + 'Z') - new Date(r.started_at + 'Z')) / 1000)) + 's'
+  : '-';
+
+async function loadRuns() {
+  const msg = document.getElementById('msg');
+  try {
+    const r = await fetch('/runs?limit=20');
+    if (r.status === 401) { window.location = '/login'; return; }
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const runs = await r.json();
+    document.getElementById('runs').innerHTML = runs.map(x => `
+      <tr class="border-t hover:bg-slate-50 cursor-pointer" onclick="showRun(${x.id})">
+        <td class="p-3 font-medium">#${x.id}</td>
+        <td><span class="px-2 py-1 rounded text-xs ${badge[x.status] || ''}">${esc(x.status)}</span></td>
+        <td>${esc(when(x.started_at))}</td>
+        <td>${esc(dur(x))}</td>
+      </tr>`).join('') || '<tr><td class="p-3 text-slate-500" colspan="4">No runs yet.</td></tr>';
+  } catch (e) { msg.textContent = 'Could not load runs: ' + e.message; }
+}
+
+async function showRun(id) {
+  const detail = document.getElementById('detail');
+  try {
+    const r = await fetch('/runs/' + id);
+    if (!r.ok) throw new Error('Server returned ' + r.status);
+    const steps = await r.json();
+    detail.innerHTML = `<h2 class="font-semibold mb-2">Run #${id}: steps</h2>` + steps.map(s => `
+      <div class="bg-white rounded shadow p-3 mb-2">
+        <b>${esc(s.step_id)}</b>
+        <span class="px-2 py-1 rounded text-xs ${badge[s.status] || ''}">${esc(s.status)}</span>
+        <pre class="text-xs text-slate-500 mt-2 whitespace-pre-wrap break-all">${esc(String(s.output ?? '').slice(0, 300))}</pre>
+      </div>`).join('');
+  } catch (e) { detail.textContent = 'Could not load steps: ' + e.message; }
+}
+loadRuns();
+</script>
+<script src="/assets/nav.js"></script>
+</body>
+</html>
