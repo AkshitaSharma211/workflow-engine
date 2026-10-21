@@ -6,40 +6,45 @@
 <title>Search jobs</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-50 text-slate-800">
-<div class="max-w-4xl mx-auto p-6">
-  <h1 class="text-2xl font-bold mb-4">Explore jobs</h1>
+<body class="bg-slate-50 text-slate-800 antialiased">
+<main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Explore jobs</h1>
+  <p class="mt-1 mb-6 text-sm text-slate-500">Search everything collected from the company boards.</p>
 
-  <div class="bg-white rounded shadow p-4 mb-4 space-y-3">
-    <div class="flex gap-2">
-      <input id="kw" placeholder="Keyword, then press Enter" class="border rounded px-3 py-2 flex-1">
-      <input id="company" placeholder="Company (optional)" class="border rounded px-3 py-2 w-48">
+  <div class="mb-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="flex flex-col gap-2 sm:flex-row">
+      <input id="kw" placeholder="Keyword, then press Enter"
+        class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+      <input id="company" placeholder="Company (optional)"
+        class="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 sm:w-56">
     </div>
     <div id="chips" class="flex flex-wrap gap-2"></div>
     <div id="filters" class="flex flex-wrap gap-2 text-sm"></div>
   </div>
 
-  <p id="count" class="text-sm text-slate-500 mb-2"></p>
-  <div id="list" class="space-y-2"></div>
-  <div id="pager" class="flex justify-between items-center mt-4 text-sm"></div>
-</div>
+  <p id="count" class="mb-3 text-sm text-slate-500"></p>
+  <div id="list" class="space-y-3"></div>
+  <div id="pager" class="mt-6 flex items-center justify-between text-sm text-slate-600"></div>
+</main>
 
 <script>
 const state = {words: [], remote: false, days: 0, company: '', page: 1};
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
-const on = 'bg-slate-900 text-white', off = 'bg-white border';
+const on = 'bg-indigo-600 text-white border border-indigo-600';
+const off = 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50';
+const pagerBtn = 'rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium hover:bg-slate-50 disabled:opacity-40';
 
 function renderControls() {
   document.getElementById('chips').innerHTML = state.words.map((w, i) =>
-    `<span class="bg-slate-200 rounded px-2 py-1 text-sm">${esc(w)}
-      <button onclick="removeWord(${i})" class="ml-1">✕</button></span>`).join('');
+    `<span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-sm text-indigo-700">${esc(w)}
+      <button onclick="removeWord(${i})" class="text-indigo-400 hover:text-indigo-700" aria-label="Remove">✕</button></span>`).join('');
   const days = [[0, 'All time'], [1, '24 hours'], [7, '7 days']];
   document.getElementById('filters').innerHTML =
-    `<button onclick="toggleRemote()" class="px-3 py-1 rounded ${state.remote ? on : off}">Remote only</button>` +
+    `<button onclick="toggleRemote()" class="rounded-lg px-3 py-1.5 font-medium ${state.remote ? on : off}">Remote only</button>` +
     days.map(([v, label]) =>
-      `<button onclick="setDays(${v})" class="px-3 py-1 rounded ${state.days === v ? on : off}">${label}</button>`).join('');
+      `<button onclick="setDays(${v})" class="rounded-lg px-3 py-1.5 font-medium ${state.days === v ? on : off}">${label}</button>`).join('');
 }
 
 async function load() {
@@ -59,23 +64,23 @@ async function load() {
 
     count.textContent = `${d.total} jobs`;
     document.getElementById('list').innerHTML = d.jobs.map(j => `
-      <div class="bg-white rounded shadow p-4 flex justify-between gap-4">
-        <div>
-          <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium underline">${esc(j.title)}</a>
-          <div class="text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}</div>
+      <div class="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:flex-row">
+        <div class="min-w-0">
+          <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-slate-900 hover:text-indigo-600">${esc(j.title)}</a>
+          <div class="mt-1 text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}</div>
         </div>
-        <div class="flex gap-1 text-xs items-start">
+        <div class="flex shrink-0 items-start gap-1.5 text-xs">
           ${['saved', 'applied', 'ignored'].map(s =>
             `<button onclick="mark(${j.id}, '${s}', '${j.my_status}')"
-              class="px-2 py-1 rounded ${j.my_status === s ? on : off}">${s}</button>`).join('')}
+              class="rounded-md px-2.5 py-1 font-medium ${j.my_status === s ? on : off}">${s}</button>`).join('')}
         </div>
-      </div>`).join('') || '<p class="text-slate-500">Nothing matches.</p>';
+      </div>`).join('') || '<p class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">Nothing matches. Try fewer filters.</p>';
 
     const pages = Math.max(1, Math.ceil(d.total / d.per_page));
     document.getElementById('pager').innerHTML = `
-      <button onclick="goPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Prev</button>
+      <button onclick="goPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''} class="${pagerBtn}">Prev</button>
       <span>Page ${state.page} of ${pages}</span>
-      <button onclick="goPage(${state.page + 1})" ${state.page >= pages ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Next</button>`;
+      <button onclick="goPage(${state.page + 1})" ${state.page >= pages ? 'disabled' : ''} class="${pagerBtn}">Next</button>`;
   } catch (e) {
     count.textContent = 'Could not load jobs: ' + e.message;
   }
