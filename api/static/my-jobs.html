@@ -6,14 +6,15 @@
 <title>My jobs</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-50 text-slate-800">
-<div class="max-w-4xl mx-auto p-6">
-  <h1 class="text-2xl font-bold mb-4">My jobs</h1>
-  <div id="tabs" class="flex gap-2 mb-4 text-sm"></div>
-  <p id="count" class="text-sm text-slate-500 mb-2"></p>
-  <div id="list" class="space-y-2"></div>
-  <div id="pager" class="flex justify-between items-center mt-4 text-sm"></div>
-</div>
+<body class="bg-slate-50 text-slate-800 antialiased">
+<main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900">My jobs</h1>
+  <p class="mt-1 mb-6 text-sm text-slate-500">The jobs you've marked. Only you can see these.</p>
+  <div id="tabs" class="mb-4 flex gap-2 text-sm"></div>
+  <p id="count" class="mb-3 text-sm text-slate-500"></p>
+  <div id="list" class="space-y-3"></div>
+  <div id="pager" class="mt-6 flex items-center justify-between text-sm text-slate-600"></div>
+</main>
 
 <script>
 const TABS = [['saved', 'Saved'], ['applied', 'Applied'], ['ignored', 'Ignored']];
@@ -22,11 +23,13 @@ const state = {status: TABS.some(t => t[0] === fromHash) ? fromHash : 'saved', p
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
-const on = 'bg-slate-900 text-white', off = 'bg-white border';
+const on = 'bg-indigo-600 text-white border border-indigo-600';
+const off = 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50';
+const pagerBtn = 'rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium hover:bg-slate-50 disabled:opacity-40';
 
 async function load() {
   document.getElementById('tabs').innerHTML = TABS.map(([v, label]) =>
-    `<button onclick="setTab('${v}')" class="px-3 py-1 rounded ${state.status === v ? on : off}">${label}</button>`).join('');
+    `<button onclick="setTab('${v}')" class="rounded-lg px-4 py-1.5 font-medium ${state.status === v ? on : off}">${label}</button>`).join('');
   const count = document.getElementById('count');
   try {
     const p = new URLSearchParams({status: state.status, open_only: 'false', page: state.page});
@@ -37,23 +40,23 @@ async function load() {
 
     count.textContent = `${d.total} ${state.status} job${d.total === 1 ? '' : 's'}`;
     document.getElementById('list').innerHTML = d.jobs.map(j => `
-      <div class="bg-white rounded shadow p-4 flex justify-between gap-4">
-        <div>
-          <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium underline">${esc(j.title)}</a>
-          <div class="text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}${j.is_open ? '' : ' · closed'}</div>
+      <div class="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:flex-row">
+        <div class="min-w-0">
+          <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-slate-900 hover:text-indigo-600">${esc(j.title)}</a>
+          <div class="mt-1 text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}${j.is_open ? '' : ' · closed'}</div>
         </div>
-        <div class="flex gap-1 text-xs items-start">
+        <div class="flex shrink-0 items-start gap-1.5 text-xs">
           ${['saved', 'applied', 'ignored'].map(s =>
             `<button onclick="mark(${j.id}, '${s}', '${j.my_status}')"
-              class="px-2 py-1 rounded ${j.my_status === s ? on : off}">${s}</button>`).join('')}
+              class="rounded-md px-2.5 py-1 font-medium ${j.my_status === s ? on : off}">${s}</button>`).join('')}
         </div>
-      </div>`).join('') || '<p class="text-slate-500">Nothing here yet. Mark jobs from the Search page.</p>';
+      </div>`).join('') || '<p class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">Nothing here yet. Mark jobs from the Search page.</p>';
 
     const pages = Math.max(1, Math.ceil(d.total / d.per_page));
     document.getElementById('pager').innerHTML = `
-      <button onclick="goPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Prev</button>
+      <button onclick="goPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''} class="${pagerBtn}">Prev</button>
       <span>Page ${state.page} of ${pages}</span>
-      <button onclick="goPage(${state.page + 1})" ${state.page >= pages ? 'disabled' : ''} class="px-3 py-1 border rounded bg-white disabled:opacity-40">Next</button>`;
+      <button onclick="goPage(${state.page + 1})" ${state.page >= pages ? 'disabled' : ''} class="${pagerBtn}">Next</button>`;
   } catch (e) {
     count.textContent = 'Could not load: ' + e.message;
   }
