@@ -21,9 +21,9 @@ FETCH_STEPS = ["fetch", "fetch_muse", "fetch_remotive", "fetch_lever", "fetch_as
 workflow = {
     "fetch": {"deps": [], "type": "fetch_jobs", "config": {"boards": [
         "stripe", "airbnb", "databricks", "cloudflare", "coinbase",
-        "anthropic", "scaleai", "postman"]}},
+        "anthropic", "scaleai"]}},
     "fetch_muse": {"deps": [], "type": "fetch_muse", "config": {
-        "levels": ["Internship", "Entry Level"], "max_pages": 5}},
+        "levels": ["Internship", "Entry Level"], "max_pages": 10}},
     "fetch_remotive": {"deps": [], "type": "fetch_remotive", "config": {}},
     "fetch_lever": {"deps": [], "type": "fetch_lever", "config": {
         "boards": ["spotify", "palantir", "cred", "meesho"]}},

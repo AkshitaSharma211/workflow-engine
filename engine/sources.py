@@ -28,6 +28,7 @@ def fetch_muse(inputs: dict, config: dict) -> list:
             params = [("page", page)] + [("level", l) for l in levels] \
                      + [("category", c) for c in categories]
             data = _get_json("https://www.themuse.com/api/public/jobs", params)
+            print(f"fetch_remotive: API returned {len(data.get('jobs', []))} jobs before filtering")
             for r in data.get("results", []):
                 where = ", ".join(l.get("name", "") for l in r.get("locations", [])) or "Unknown"
                 level = ((r.get("levels") or [{}])[0]).get("name", "")
