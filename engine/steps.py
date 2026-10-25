@@ -8,6 +8,17 @@ import re
 
 load_dotenv()
 
+COMPLETE_SOURCES = {"greenhouse", "lever", "ashby"}
+
+
+def _all_jobs(inputs: dict) -> list:
+    """Merge the job lists from every fetch step feeding this step."""
+    jobs = []
+    for value in inputs.values():
+        if isinstance(value, list):
+            jobs.extend(value)
+    return jobs
+
 def fetch_jobs(inputs: dict, config: dict) -> list:
     """
     config: {"boards": ["stripe", "airbnb", ...]}
@@ -35,6 +46,7 @@ def fetch_jobs(inputs: dict, config: dict) -> list:
                 "url": job["absolute_url"],
                 "location": location,
                 "company": board,
+                "source": "greenhouse",
             })
 
     if failed == len(boards):
@@ -48,36 +60,32 @@ def _has_word(text: str, words: list) -> bool:
     return any(re.search(rf"\b{re.escape(w)}\b", text) for w in words)
 
 def filter_jobs(inputs: dict, config: dict) -> list:
-    """
-    inputs: {"fetch": [jobs]}
-    config: {"keywords": [...], "level_include": [...],
-             "level_exclude": [...], "locations": [...]}
-    A job passes only if all four rules hold (case-insensitive).
-    """
-    jobs = inputs["fetch"]
+    jobs = _all_jobs(inputs)
     keywords = [w.lower() for w in config["keywords"]]
     level_include = [w.lower() for w in config["level_include"]]
     level_exclude = [w.lower() for w in config["level_exclude"]]
     locations = [w.lower() for w in config["locations"]]
+    location_exclude = [w.lower() for w in config.get("location_exclude", [])]
 
     filtered = []
     for job in jobs:
         title = job["title"].lower()
         location = job["location"].lower()
+        level = (job.get("level") or "").lower()
 
         if not _has_word(title, keywords):
             continue
-        if not _has_word(title, level_include):
+        if level_include and level not in ("internship", "entry level") \
+                and not _has_word(title, level_include):
             continue
         if _has_word(title, level_exclude):
             continue
         if not _has_word(location, locations):
-            continue        
-
+            continue
+        if any(w in location for w in location_exclude):
+            continue
         filtered.append(job)
-
     return filtered
-
 
 def dedupe(inputs: dict, config: dict) -> list:
     """
@@ -136,13 +144,17 @@ def mark_seen(inputs: dict, config: dict) -> str:
         session.close()
 
 def save_jobs(inputs: dict, config: dict) -> dict:
-    jobs = inputs["fetch"]
+    jobs = _all_jobs(inputs)
     if not jobs:
         return {"new": 0, "refreshed": 0, "closed": 0}
 
     now = datetime.datetime.utcnow()
-    unique = {j["id"]: j for j in jobs}          # drop duplicates inside this fetch
-    companies = {j.get("company", "") for j in unique.values()}
+    unique = {j["id"]: j for j in jobs}
+    # only complete company boards can tell us a job has really vanished
+    complete_companies = {
+        j.get("company", "") for j in unique.values()
+        if j.get("source", "greenhouse") in COMPLETE_SOURCES
+    }
 
     with SessionLocal() as session:
         # 1. which of these jobs do we already have?
@@ -152,7 +164,9 @@ def save_jobs(inputs: dict, config: dict) -> dict:
         # 2. add the ones we don't have
         session.add_all([
             Job(job_id=j["id"], title=j["title"], company=j.get("company", ""),
-                url=j["url"], location=j["location"], last_seen=now, is_open=True)
+                url=j["url"], location=j["location"],
+                source=j.get("source", "greenhouse"), level=j.get("level", ""),
+                last_seen=now, is_open=True)
             for j in unique.values() if j["id"] not in stored
         ])
 
@@ -160,9 +174,12 @@ def save_jobs(inputs: dict, config: dict) -> dict:
         session.query(Job).filter(Job.job_id.in_(list(stored))).update(
             {"last_seen": now, "is_open": True}, synchronize_session=False)
 
-        # 4. close jobs from these companies that were not refreshed this run
+        # 4. close jobs from complete boards that were not seen this run
         closed = session.query(Job).filter(
-            Job.company.in_(companies), Job.is_open.is_(True), Job.last_seen < now
+            Job.source.in_(list(COMPLETE_SOURCES)),
+            Job.company.in_(list(complete_companies)),
+            Job.is_open.is_(True),
+            Job.last_seen < now,
         ).update({"is_open": False}, synchronize_session=False)
 
         session.commit()

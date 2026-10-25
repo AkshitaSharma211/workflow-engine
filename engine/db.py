@@ -54,7 +54,9 @@ class Job(Base):
     status = Column(String, default="new")   # new / applied / ignored
     first_seen = Column(DateTime, default=datetime.datetime.utcnow)
     last_seen = Column(DateTime)
-    is_open = Column(Boolean, default=True)    
+    is_open = Column(Boolean, default=True)
+    source = Column(String)
+    level = Column(String)    
 
 class User(Base):
     __tablename__ = "users"
