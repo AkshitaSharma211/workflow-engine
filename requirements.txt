@@ -5,3 +5,6 @@ requests
 pytest
 fastapi
 uvicorn
+itsdangerous
+httpx
+bcrypt

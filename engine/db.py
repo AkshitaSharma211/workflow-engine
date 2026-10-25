@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, ForeignKey
+from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
 import datetime
 import os
@@ -54,8 +54,26 @@ class Job(Base):
     status = Column(String, default="new")   # new / applied / ignored
     first_seen = Column(DateTime, default=datetime.datetime.utcnow)
     last_seen = Column(DateTime)
-    is_open = Column(Boolean, default=True)    
+    is_open = Column(Boolean, default=True)
+    source = Column(String)
+    level = Column(String)    
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)   
+
+
+class UserJob(Base):
+    __tablename__ = "user_jobs"
+    __table_args__ = (UniqueConstraint("user_id", "job_id"),)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    status = Column(String, nullable=False)   # saved / applied / ignored
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 def init_db():
     Base.metadata.create_all(engine)
