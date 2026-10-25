@@ -8,7 +8,7 @@ from fastapi import FastAPI, Depends, Header, HTTPException, BackgroundTasks, Re
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.auth import hash_password, verify_password
@@ -153,11 +153,16 @@ def me(request: Request):
 
 
 # ---------- jobs ----------
+ENTRY_RE = r"\m(intern|interns|internship|trainee|apprentice|junior|jr|graduate|fresher|entry)\M"
+SENIOR_RE = r"\m(senior|sr|staff|principal|lead|manager|director|head|vp)\M"
+
 
 @app.get("/jobs")
 def search_jobs(
     q: str = "",
     company: str = "",
+    source: str = "",
+    entry: bool = False,
     remote: bool = False,
     days: int = Query(0, ge=0, le=365),
     open_only: bool = True,
@@ -174,6 +179,14 @@ def search_jobs(
             query = query.join(
                 UserJob, and_(UserJob.job_id == Job.id, UserJob.user_id == user_id)
             ).filter(UserJob.status == status)
+        if source:
+            query = query.filter(Job.source == source)
+        if entry:
+            query = query.filter(
+                or_(func.lower(func.coalesce(Job.level, "")).in_(["internship", "entry level"]),
+                    Job.title.op("~*")(ENTRY_RE)),
+                Job.title.op("!~*")(SENIOR_RE),
+            )
         if company.strip():
             query = query.filter(Job.company.ilike(f"%{company.strip()}%"))
         if remote:
@@ -181,7 +194,7 @@ def search_jobs(
         if days:
             since = datetime.datetime.utcnow() - datetime.timedelta(days=days)
             query = query.filter(Job.first_seen >= since)
-        for word in q.split():  # every word must match, as a whole word
+        for word in q.split():
             query = query.filter(Job.title.op("~*")(rf"\m{re.escape(word)}\M"))
 
         total = query.count()
@@ -198,11 +211,11 @@ def search_jobs(
             "jobs": [
                 {"id": j.id, "title": j.title, "company": j.company, "url": j.url,
                  "location": j.location, "first_seen": j.first_seen,
-                 "is_open": j.is_open, "my_status": marks.get(j.id)}
+                 "is_open": j.is_open, "my_status": marks.get(j.id),
+                 "source": j.source, "level": j.level}
                 for j in jobs
             ],
         }
-
 
 class StatusBody(BaseModel):
     status: str

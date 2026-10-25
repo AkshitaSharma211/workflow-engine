@@ -9,14 +9,23 @@
 <body class="bg-slate-50 text-slate-800 antialiased">
 <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
   <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Explore jobs</h1>
-  <p class="mt-1 mb-6 text-sm text-slate-500">Search everything collected from the company boards.</p>
+  <p class="mt-1 mb-6 text-sm text-slate-500">Search everything collected from company boards and job feeds.</p>
 
   <div class="mb-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
     <div class="flex flex-col gap-2 sm:flex-row">
       <input id="kw" placeholder="Keyword, then press Enter"
         class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200">
       <input id="company" placeholder="Company (optional)"
-        class="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 sm:w-56">
+        class="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 sm:w-48">
+      <select id="source"
+        class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 sm:w-40">
+        <option value="">All sources</option>
+        <option value="greenhouse">Greenhouse</option>
+        <option value="lever">Lever</option>
+        <option value="ashby">Ashby</option>
+        <option value="muse">The Muse</option>
+        <option value="remotive">Remotive</option>
+      </select>
     </div>
     <div id="chips" class="flex flex-wrap gap-2"></div>
     <div id="filters" class="flex flex-wrap gap-2 text-sm"></div>
@@ -28,7 +37,7 @@
 </main>
 
 <script>
-const state = {words: [], remote: false, days: 0, company: '', page: 1};
+const state = {words: [], remote: false, entry: true, days: 0, company: '', source: '', page: 1};
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
@@ -42,6 +51,7 @@ function renderControls() {
       <button onclick="removeWord(${i})" class="text-indigo-400 hover:text-indigo-700" aria-label="Remove">✕</button></span>`).join('');
   const days = [[0, 'All time'], [1, '24 hours'], [7, '7 days']];
   document.getElementById('filters').innerHTML =
+    `<button onclick="toggleEntry()" class="rounded-lg px-3 py-1.5 font-medium ${state.entry ? on : off}">Entry-level</button>` +
     `<button onclick="toggleRemote()" class="rounded-lg px-3 py-1.5 font-medium ${state.remote ? on : off}">Remote only</button>` +
     days.map(([v, label]) =>
       `<button onclick="setDays(${v})" class="rounded-lg px-3 py-1.5 font-medium ${state.days === v ? on : off}">${label}</button>`).join('');
@@ -54,6 +64,8 @@ async function load() {
     const p = new URLSearchParams();
     if (state.words.length) p.set('q', state.words.join(' '));
     if (state.company) p.set('company', state.company);
+    if (state.source) p.set('source', state.source);
+    if (state.entry) p.set('entry', 'true');
     if (state.remote) p.set('remote', 'true');
     if (state.days) p.set('days', state.days);
     p.set('page', state.page);
@@ -68,13 +80,17 @@ async function load() {
         <div class="min-w-0">
           <a href="${safeUrl(j.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-slate-900 hover:text-indigo-600">${esc(j.title)}</a>
           <div class="mt-1 text-sm text-slate-500">${esc(j.company)} · ${esc(j.location)}</div>
+          <div class="mt-2 flex gap-1.5 text-xs">
+            ${j.source ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">${esc(j.source)}</span>` : ''}
+            ${j.level ? `<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">${esc(j.level)}</span>` : ''}
+          </div>
         </div>
         <div class="flex shrink-0 items-start gap-1.5 text-xs">
           ${['saved', 'applied', 'ignored'].map(s =>
             `<button onclick="mark(${j.id}, '${s}', '${j.my_status}')"
               class="rounded-md px-2.5 py-1 font-medium ${j.my_status === s ? on : off}">${s}</button>`).join('')}
         </div>
-      </div>`).join('') || '<p class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">Nothing matches. Try fewer filters.</p>';
+      </div>`).join('') || '<p class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">Nothing matches. Try turning off Entry-level or changing the source.</p>';
 
     const pages = Math.max(1, Math.ceil(d.total / d.per_page));
     document.getElementById('pager').innerHTML = `
@@ -86,6 +102,7 @@ async function load() {
   }
 }
 
+function toggleEntry() { state.entry = !state.entry; state.page = 1; load(); }
 function toggleRemote() { state.remote = !state.remote; state.page = 1; load(); }
 function setDays(v) { state.days = v; state.page = 1; load(); }
 function removeWord(i) { state.words.splice(i, 1); state.page = 1; load(); }
@@ -108,6 +125,9 @@ document.getElementById('kw').addEventListener('keydown', e => {
 });
 document.getElementById('company').addEventListener('change', e => {
   state.company = e.target.value.trim(); state.page = 1; load();
+});
+document.getElementById('source').addEventListener('change', e => {
+  state.source = e.target.value; state.page = 1; load();
 });
 load();
 </script>
