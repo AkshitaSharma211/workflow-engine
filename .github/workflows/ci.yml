@@ -17,6 +17,9 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SECRET_KEY: ci-secret-key
+      API_KEY: ci-api-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,5 +27,4 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: python -c "from engine import db, steps; db.Base.metadata.create_all(db.engine)"
       - run: pytest

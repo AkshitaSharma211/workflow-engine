@@ -6,3 +6,4 @@ pytest
 fastapi
 uvicorn
 itsdangerous
+httpx
